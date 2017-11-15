@@ -116,7 +116,7 @@ function simulate!(m::LinearRegressionCluster)
     σₑ= m.sigma_e
 
     ## Parameters
-    β₀ = m.opt.β₀
+    β₀  = m.opt.β₀
     σ_ξ = m.opt.σ_ξ 
     σ_z = m.opt.σ_z
     σ_ϵ = m.opt.σ_ϵ 
@@ -183,18 +183,21 @@ function montecarlo(m::Type{T} where T <: MonteCarloModel, opt::MonteCarloModelO
         simulate!(model)
         push!(res, estimatemodel(model))
     end
-    res
-    # res = convert(DataFrame, convert(Array,res))
-    # names!(res,
-    # [:theta_u, :V1_u, :V2_u, :V3_u, :V4_u, :V5_u, 
-    #  :G_u, :k_u, 
-    #  :qu_025, :qu_975, 
-    #  :qu_050, :qu_950, 
-    #  :qu0_025, :qu0_975, 
-    #  :qu0_050, :qu0_950, 
-    #  :theta_w, :V1_w, :V2_w, :V3_w, :V4_w, :V5_w, 
-    #  :G_w, :k_w,
-    #  :qw0_025, :qw0_975, :qw0_050, :qw0_950])
+    ## Add information about the experiment
+    
+
+    res = convert(DataFrame, convert(Array,res))
+    names!(res,
+    [:theta_u, :V1_u, :V2_u, :V3_u, :V4_u, :V5_u, 
+     :G_u, :k_u, 
+     :qu_025, :qu_975, 
+     :qu_050, :qu_950, 
+     :qu0_025, :qu0_975, 
+     :qu0_050, :qu0_950, 
+     :theta_w, :V1_w, :V2_w, :V3_w, :V4_w, :V5_w, 
+     :G_w, :k_w,
+     :qw0_025, :qw0_975, :qw0_050, :qw0_950])
+
 end
 
 
@@ -203,24 +206,24 @@ function estimatemodel(m::LinearRegressionCluster)
     X = m.X
     cl = m.cl
     iter = m.iter
-    fitted_u = fit(GeneralizedLinearModel, m.X, m.y, Normal(), IdentityLink())
+    fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
 
     theta_u = first(coef(fitted_u))
     V1_u = first(stderr(fitted_u))
     V2_u = first(stderr(fitted_u, HC1()))
 
-    V3_u = faststderr(fitted_u, m, CRHC1(m.cl))
-    V4_u = faststderr(fitted_u, m, CRHC2(m.cl))
-    V5_u = faststderr(fitted_u, m, CRHC3(m.cl))
+    V3_u = faststderr(fitted_u, m, CRHC1(cl))
+    V4_u = faststderr(fitted_u, m, CRHC2(cl))
+    V5_u = faststderr(fitted_u, m, CRHC3(cl))
 
-    fitted_w = fit(GeneralizedLinearModel, m.X, m.y, Normal(), IdentityLink(), wts = m.wts)
-    theta_w = first(coef(fitted_w))
-    V1_w = first(stderr(fitted_w))
+    fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
+    theta_w = first(coef(f))
+    V1_w = fastiid(fitted_w)
     V2_w = first(stderr(fitted_w, HC1()))
 
-    V3_w = faststderr(fitted_w, m, CRHC1(m.cl))
-    V4_w = faststderr(fitted_w, m, CRHC2(m.cl))
-    V5_w = faststderr(fitted_w, m, CRHC3(m.cl))
+    V3_w = faststderr(fitted_w, m, CRHC1(cl))
+    V4_w = faststderr(fitted_w, m, CRHC2(cl))
+    V5_w = faststderr(fitted_w, m, CRHC3(cl))
 
     G_u, k_u = kappastar(fitted_u, m)
     G_w, k_w = kappastar(fitted_w, m)
@@ -236,6 +239,12 @@ function estimatemodel(m::LinearRegressionCluster)
     qu0[1], qu0[4], qu0[2], qu0[3], 
     theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
     qw0[1], qw0[4], qw0[2], qw0[3]]
+end
+
+function fastiid(f::GLM.AbstractGLM)
+    r = f.rr.wrkresid.*sqrt(f.rr.wts)
+    ichol = inv(cholfact(f.pp))
+    sqrt(ichol[1]*mean(abs2.(r)))
 end
 
 function kappastar(f::GLM.AbstractGLM, m::LinearRegressionCluster)
@@ -297,9 +306,9 @@ function fastclusterize(U, bstarts)
     for g = 1:G
         s = 0.0
         for i = bstarts[g]
-            @inbounds s += U[i, 1]^2
+            @inbounds s += U[i, 1]
         end
-        M += s
+        M += s^2
     end
     M
 end
