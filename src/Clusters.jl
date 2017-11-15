@@ -217,7 +217,7 @@ function estimatemodel(m::LinearRegressionCluster)
     V5_u = faststderr(fitted_u, m, CRHC3(cl))
 
     fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
-    theta_w = first(coef(f))
+    theta_w = first(coef(fitted_w))
     V1_w = fastiid(fitted_w)
     V2_w = first(stderr(fitted_w, HC1()))
 
@@ -241,6 +241,7 @@ function estimatemodel(m::LinearRegressionCluster)
     qw0[1], qw0[4], qw0[2], qw0[3]]
 end
 
+## GLM.jl assumes importance weights not analytic weights
 function fastiid(f::GLM.AbstractGLM)
     r = f.rr.wrkresid.*sqrt(f.rr.wts)
     ichol = inv(cholfact(f.pp))
