@@ -243,7 +243,7 @@ end
 
 ## GLM.jl assumes importance weights not analytic weights
 function fastiid(f::GLM.AbstractGLM)
-    r = f.rr.wrkresid.*sqrt(f.rr.wts)
+    r = f.rr.wrkresid.*sqrt.(f.rr.wts)
     ichol = inv(cholfact(f.pp))
     sqrt(ichol[1]*mean(abs2.(r)))
 end
