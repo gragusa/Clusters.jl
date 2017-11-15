@@ -228,11 +228,11 @@ function estimatemodel(m::LinearRegressionCluster)
     G_u, k_u = kappastar(fitted_u, m)
     G_w, k_w = kappastar(fitted_w, m)
 
-    _, _, qw = fastwildboot_nonull(fitted_w, m, TwoPoint(), rep = 999)
-    _, _, qu = fastwildboot_nonull(fitted_u, m, TwoPoint(), rep = 999)
+    # _, _, qw = fastwildboot_nonull(fitted_w, m, TwoPoint(), rep = 999)
+    # _, _, qu = fastwildboot_nonull(fitted_u, m, TwoPoint(), rep = 999)
 
-    _, _, qw0 = fastwildboot_null(fitted_w, m, TwoPoint(),  rep = 999)
-    _, _, qu0 = fastwildboot_null(fitted_u, m, TwoPoint(),  rep = 999)
+    _, _, qw0 = fastwildboot_null(fitted_w, m, TwoPoint(),  rep = 499)
+    _, _, qu0 = fastwildboot_null(fitted_u, m, TwoPoint(),  rep = 499)
 
     [theta_u, V1_u, V2_u, V3_u, V4_u, V5_u, G_u, k_u, 
     qu[1], qu[4], qu[2], qu[3], 
@@ -279,7 +279,7 @@ function fastmeat(ichol, wrkresid, sqwts, Xcopy, m::LinearRegressionCluster, v::
     cl  = m.cl    
     e   = wrkresid    
     X   = Xcopy
-    broadcast!(*, X, X, sqwts)
+    #broadcast!(*, X, X, sqwts)
     broadcast!(*, e, e, sqwts)
     CovarianceMatrices.adjresid!(v, X, e, ichol, bstarts)
     fastclusterize(X.*e, bstarts)
@@ -320,9 +320,9 @@ function kappaclusterize!(M, U, bstarts)
     for m = 1:G
         s = 0.0
         for i = bstarts[m]
-            @inbounds s += U[i, 1]^2
+            @inbounds s += U[i, 1]
         end
-        M[m] = s
+        M[m] = s^2
     end
 end
 
@@ -343,7 +343,7 @@ function wbweights!(x::TwoPoint, W::Vector{Float32})
     end
 end
 
-function fastwildboot_null(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT::WildWeights; rep::Int = 999)
+function fastwildboot_null(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT::WildWeights; rep::Int = 499)
     ## This impose the null hypothesis the the coefficient is 0
     X = copy(m.X)        
     Y = f.rr.y
