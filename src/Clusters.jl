@@ -73,6 +73,15 @@ end
 Base.length(i::ConfInterval) = length(i.lo)
 
 
+function average_length(i::Clusters.ConfInterval)
+    l = 0.0
+    n = length(i)
+    @simd for j in 1:n
+        @inbounds l += i.hi[j]-i.lo[j]
+    end
+    l/n
+end
+
 function Base.in(i::ConfInterval, a::Number)
     isin = BitArray(length(i))
     for j in 1:length(i)
@@ -83,6 +92,11 @@ function Base.in(i::ConfInterval, a::Number)
         end
     end
     isin
+end
+
+function coverage(i::Clusters.ConfInterval, a::Number)
+    ifin = in(i, a)
+    mean(ifin)
 end
 
 function initialize(::Type{LinearRegressionCluster}, opt)
@@ -206,39 +220,43 @@ function estimatemodel(m::LinearRegressionCluster)
     X = m.X
     cl = m.cl
     iter = m.iter
-    fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
+    try
+        fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
 
-    theta_u = first(coef(fitted_u))
-    V1_u = first(stderr(fitted_u))
-    V2_u = first(stderr(fitted_u, HC1()))
+        theta_u = first(coef(fitted_u))
+        V1_u = first(stderr(fitted_u))
+        V2_u = first(stderr(fitted_u, HC1()))
 
-    V3_u = faststderr(fitted_u, m, CRHC1(cl))
-    V4_u = faststderr(fitted_u, m, CRHC2(cl))
-    V5_u = faststderr(fitted_u, m, CRHC3(cl))
+        V3_u = faststderr(fitted_u, m, CRHC1(cl))
+        V4_u = faststderr(fitted_u, m, CRHC2(cl))
+        V5_u = faststderr(fitted_u, m, CRHC3(cl))
 
-    fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
-    theta_w = first(coef(fitted_w))
-    V1_w = fastiid(fitted_w, m)
-    V2_w = first(stderr(fitted_w, HC1()))
+        fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
+        theta_w = first(coef(fitted_w))
+        V1_w = fastiid(fitted_w, m)
+        V2_w = first(stderr(fitted_w, HC1()))
 
-    V3_w = faststderr(fitted_w, m, CRHC1(cl))
-    V4_w = faststderr(fitted_w, m, CRHC2(cl))
-    V5_w = faststderr(fitted_w, m, CRHC3(cl))
+        V3_w = faststderr(fitted_w, m, CRHC1(cl))
+        V4_w = faststderr(fitted_w, m, CRHC2(cl))
+        V5_w = faststderr(fitted_w, m, CRHC3(cl))
 
-    G_u, k_u = kappastar(fitted_u, m)
-    G_w, k_w = kappastar(fitted_w, m)
+        G_u, k_u = kappastar(fitted_u, m)
+        G_w, k_w = kappastar(fitted_w, m)
 
-    _, _, qw = fastwildboot_nonull(fitted_w, m, TwoPoint(), rep = 499)
-    _, _, qu = fastwildboot_nonull(fitted_u, m, TwoPoint(), rep = 499)
+        _, _, qw = fastwildboot_nonull(fitted_w, m, TwoPoint(), rep = 499)
+        _, _, qu = fastwildboot_nonull(fitted_u, m, TwoPoint(), rep = 499)
 
-    _, _, qw0 = fastwildboot_null(fitted_w, m, TwoPoint(),  rep = 499)
-    _, _, qu0 = fastwildboot_null(fitted_u, m, TwoPoint(),  rep = 499)
+        _, _, qw0 = fastwildboot_null(fitted_w, m, TwoPoint(),  rep = 499)
+        _, _, qu0 = fastwildboot_null(fitted_u, m, TwoPoint(),  rep = 499)
 
-    [theta_u, V1_u, V2_u, V3_u, V4_u, V5_u, G_u, k_u, 
-    qu[1], qu[4], qu[2], qu[3], 
-    qu0[1], qu0[4], qu0[2], qu0[3], 
-    theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
-    qw0[1], qw0[4], qw0[2], qw0[3]]
+        [theta_u, V1_u, V2_u, V3_u, V4_u, V5_u, G_u, k_u, 
+        qu[1], qu[4], qu[2], qu[3], 
+        qu0[1], qu0[4], qu0[2], qu0[3], 
+        theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
+        qw0[1], qw0[4], qw0[2], qw0[3]]
+    catch
+        fill(NaN, 28)
+    end
 end
 
 ## GLM.jl assumes importance weights not analytic weights
@@ -435,6 +453,6 @@ function fastwildboot_nonull(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT:
     (β, σ, quantile((β-betahat)./σ, [.025, .05, .95,.975]))
 end
 
-export LinearRegressionCluster, simulate!, montecarlo, initialize!
+export LinearRegressionCluster, simulate!, montecarlo, initialize!, ConfInterval, average_length
 
 end 
