@@ -12,8 +12,6 @@ struct Mammen2 <: WildWeights end
 abstract type MonteCarloModel end
 abstract type MonteCarloModelOpt end
 
-
-
 struct LinearRegressionCluster{G} <: MonteCarloModel
     ## Containers
     y::Array{Float64, 1}
@@ -26,6 +24,7 @@ struct LinearRegressionCluster{G} <: MonteCarloModel
     iter::Array{Int64, 1}
     bstarts::Array{UnitRange{Int64},1}
     wts::Array{Float64, 1}
+    sqwts::Array{Float64, 1}
     opt::G
 end
 
@@ -92,6 +91,7 @@ function initialize(::Type{LinearRegressionCluster}, opt)
     n = sum(ng)
     cl = vcat(map((i, n) -> repeat(i:i, outer = n), 1:G, ng)...)
     wts = vcat(map((i, n) -> repeat(1/n:1/n, outer = n), 1:G, ng)...)
+    sqwts = sqrt.(wts)
     iter = mapreduce(x -> collect(1:x), vcat, ng)
     bstarts = [searchsorted(cl, j[2]) for j in enumerate(unique(cl))]
     y = Array{Float64}(n)
@@ -100,7 +100,7 @@ function initialize(::Type{LinearRegressionCluster}, opt)
     eta = Array{Float64}(G)
     D = similar(eta)
     sigma_e = similar(y)
-    LinearRegressionCluster(y, X, epsilon, eta, D, sigma_e, cl, iter, bstarts, wts, opt)
+    LinearRegressionCluster(y, X, epsilon, eta, D, sigma_e, cl, iter, bstarts, wts, sqwts, opt)
 end
 
 function simulate!(m::LinearRegressionCluster)
@@ -218,7 +218,7 @@ function estimatemodel(m::LinearRegressionCluster)
 
     fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
     theta_w = first(coef(fitted_w))
-    V1_w = fastiid(fitted_w)
+    V1_w = fastiid(fitted_w, m)
     V2_w = first(stderr(fitted_w, HC1()))
 
     V3_w = faststderr(fitted_w, m, CRHC1(cl))
@@ -242,8 +242,8 @@ function estimatemodel(m::LinearRegressionCluster)
 end
 
 ## GLM.jl assumes importance weights not analytic weights
-function fastiid(f::GLM.AbstractGLM)
-    r = f.rr.wrkresid.*sqrt.(f.rr.wts)
+function fastiid(f::GLM.AbstractGLM, m::LinearRegressionCluster)
+    r = f.rr.wrkresid.*m.sqwts
     ichol = inv(cholfact(f.pp))
     sqrt(ichol[1]*mean(abs2.(r)))
 end
@@ -268,19 +268,19 @@ function fastmeat(f::GLM.AbstractGLM, m::LinearRegressionCluster, v::CovarianceM
     e = copy(CovarianceMatrices.wrkresid(f.rr))
     w = f.rr.wts
     X = copy(m.X)
-    broadcast!(*, X, X, sqrt.(w))
-    broadcast!(*, e, e, sqrt.(w))
+    broadcast!(*, X, X, m.sqwts)
+    broadcast!(*, e, e, m.sqwts)
     CovarianceMatrices.adjresid!(v, X, e, ichol, bstarts)
     fastclusterize(X.*e, bstarts)
 end
 
-function fastmeat(ichol, wrkresid, sqwts, Xcopy, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC)
+function fastmeat(ichol, wrkresid, Xcopy, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC)
     bstarts = m.bstarts
     cl  = m.cl    
     e   = wrkresid    
     X   = Xcopy
     #broadcast!(*, X, X, sqwts)
-    broadcast!(*, e, e, sqwts)
+    broadcast!(*, e, e, m.sqwts)
     CovarianceMatrices.adjresid!(v, X, e, ichol, bstarts)
     fastclusterize(X.*e, bstarts)
 end
@@ -288,8 +288,8 @@ end
 function fastgamma(f::GLM.AbstractGLM, m::LinearRegressionCluster)
     A = first(inv(f.pp.chol))
     X = copy(m.X)
-    w = f.rr.wts
-    X .= X.*sqrt.(w)
+    #w = f.rr.wts
+    X .= X.*m.sqwts
     fastgamma(A, X, m.bstarts)
 end
 
@@ -348,7 +348,7 @@ function fastwildboot_null(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT::W
     X = copy(m.X)        
     Y = f.rr.y
     wts  = f.rr.wts
-    sqwts = sqrt.(wts)
+    sqwts = m.sqwts
     X .= X.*sqwts
     Hₙ = first(inv(f.pp.chol))
     
@@ -383,7 +383,7 @@ function fastwildboot_null(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT::W
         @simd for j in eachindex(ustar)
             @inbounds ustar[j] = ustar[j] - X[j]*s
         end
-        B = fastmeat(Hₙ, ustar, sqwts, copy!(cX, X), m, cr)        
+        B = fastmeat(Hₙ, ustar, copy!(cX, X), m, cr)        
         σ[h] = sqrt(B*Hₙ^2)
     end
     (β, σ, quantile(β./σ, [.025, .05, .95,.975]))
@@ -395,7 +395,7 @@ function fastwildboot_nonull(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT:
     X = copy(m.X)      
     Y = f.rr.y
     wts  = f.rr.wts
-    sqwts = sqrt.(wts)
+    sqwts = m.sqwts
     betahat = first(coef(f))
     X .= X.*sqwts
     Hₙ = first(inv(f.pp.chol))    
@@ -429,7 +429,7 @@ function fastwildboot_nonull(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT:
         @simd for j in eachindex(ustar)
             @inbounds ustar[j] = ustar[j] - X[j]*β[h]
         end
-        B = fastmeat(Hₙ, ustar, sqwts, copy!(cX, X), m, cr)        
+        B = fastmeat(Hₙ, ustar, copy!(cX, X), m, cr)        
         σ[h] = sqrt(B*Hₙ^2)
     end
     (β, σ, quantile((β-betahat)./σ, [.025, .05, .95,.975]))
