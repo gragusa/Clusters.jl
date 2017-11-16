@@ -228,8 +228,8 @@ function estimatemodel(m::LinearRegressionCluster)
     G_u, k_u = kappastar(fitted_u, m)
     G_w, k_w = kappastar(fitted_w, m)
 
-    # _, _, qw = fastwildboot_nonull(fitted_w, m, TwoPoint(), rep = 999)
-    # _, _, qu = fastwildboot_nonull(fitted_u, m, TwoPoint(), rep = 999)
+    _, _, qw = fastwildboot_nonull(fitted_w, m, TwoPoint(), rep = 499)
+    _, _, qu = fastwildboot_nonull(fitted_u, m, TwoPoint(), rep = 499)
 
     _, _, qw0 = fastwildboot_null(fitted_w, m, TwoPoint(),  rep = 499)
     _, _, qu0 = fastwildboot_null(fitted_u, m, TwoPoint(),  rep = 499)
@@ -434,5 +434,7 @@ function fastwildboot_nonull(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT:
     end
     (β, σ, quantile((β-betahat)./σ, [.025, .05, .95,.975]))
 end
+
+export LinearRegressionCluster, simulate!, montecarlo, initialize!
 
 end 
