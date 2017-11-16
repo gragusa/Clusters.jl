@@ -243,7 +243,7 @@ function estimatemodel(m::LinearRegressionCluster)
     iter = m.iter
     w  = Val{:weighted}
     uw = Val{:unweighted}
-    try
+    #try
         fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
 
         theta_u = first(coef(fitted_u))
@@ -263,23 +263,23 @@ function estimatemodel(m::LinearRegressionCluster)
         V4_w = Clusters.faststderr(fitted_w, m, CRHC2(cl), w)
         V5_w = Clusters.faststderr(fitted_w, m, CRHC3(cl), w)
 
-        G_u, k_u = kappastar(fitted_u, m)
-        G_w, k_w = kappastar(fitted_w, m)
+        G_u, k_u = Clusters.kappastar(fitted_u, m)
+        G_w, k_w = Clusters.kappastar(fitted_w, m)
 
-        _, _, qw = Clusters.fastwildboot_nonull(fitted_w, m, Clusters.TwoPoint(), rep = 499)
-        _, _, qu = Clusters.fastwildboot_nonull(fitted_u, m, Clusters.TwoPoint(), rep = 499)
+        _, _, qw = Clusters.fastwildboot_nonull(fitted_w, m, Clusters.Rademacher(), rep = 499)
+        _, _, qu = Clusters.fastwildboot_nonull(fitted_u, m, Clusters.Rademacher(), rep = 499)
 
-        _, _, qw0 = Clusters.fastwildboot_null(fitted_w, m, Clusters.TwoPoint(),  rep = 499)
-        _, _, qu0 = fastwildboot_null(fitted_u, m, TwoPoint(),  rep = 499)
+        _, _, qw0 = Clusters.fastwildboot_null(fitted_w, m, Clusters.Rademacher(),  rep = 499)
+        _, _, qu0 = Clusters.fastwildboot_null(fitted_u, m, Clusters.Rademacher(),  rep = 499)
 
         [theta_u, V1_u, V2_u, V3_u, V4_u, V5_u, G_u, k_u, 
         qu[1], qu[4], qu[2], qu[3], 
         qu0[1], qu0[4], qu0[2], qu0[3], 
         theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
         qw0[1], qw0[4], qw0[2], qw0[3]]
-    catch
-        fill(NaN, 28)
-    end
+    # catch
+    #     fill(NaN, 28)
+    # end
 end
 
 ##=
@@ -320,22 +320,21 @@ function fastmeat(f::GLM.AbstractGLM, m::LinearRegressionCluster, v::CovarianceM
     fastclusterize(X.*e, bstarts)    
 end
 
-function fastmeat(ichol, e, X, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC, 
-                  w::Type{Val{:unweighted}})
+function fastmeat(ichol, e, X, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC)
     bstarts = m.bstarts
     cl  = m.cl    
     CovarianceMatrices.adjresid!(v, X, e, ichol, bstarts)
     fastclusterize(X.*e, bstarts)
 end
 
-function fastmeat(ichol, e, X, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC, 
-                  w::Type{Val{:weighted}})
-    bstarts = m.bstarts
-    cl  = m.cl    
-    broadcast!(*, e, e, m.sqwts)
-    CovarianceMatrices.adjresid!(v, X, e, ichol, bstarts)
-    fastclusterize(X.*e, bstarts)
-end
+# function fastmeat(ichol, e, X, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC, 
+#                   w::Type{Val{:weighted}})
+#     bstarts = m.bstarts
+#     cl  = m.cl    
+#     broadcast!(*, e, e, m.sqwts)
+#     CovarianceMatrices.adjresid!(v, X, e, ichol, bstarts)
+#     fastclusterize(X.*e, bstarts)
+# end
 
 function fastclusterize(U, bstarts)
     M = 0.0
@@ -393,45 +392,48 @@ end
 function fastwildboot_null(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT::WildWeights; rep::Int = 499)
     ## Wildbootstrap with null imposed
     wts  = f.rr.wts
-    is_weighted = !all(wts[1]==wts)
+    is_weighted = !all(wts.==1.0)
     sqwts = m.sqwts
-    betahat = first(coef(f))
-    Y = f.rr.y
-    Hₙ = first(inv(f.pp.chol))    
+    betahat = first(coef(f))    
+    Hₙ = first(inv(f.pp.chol))
     if is_weighted
+        Y = f.rr.y.*sqwts
         X = m.X.*sqwts
-        uhat = Y.*sqwts
+        uhat = copy(Y)
         w = Val{:weighted}
     else
+        Y = f.rr.y
         X = copy(m.X)
         uhat = Y
         w = Val{:unweighted}
     end    
-    β, σ = _wildboot_null(Y, X, uhat, Hₙ, WT, rep, m, w)
+    β, σ = Clusters._wildboot_null(Y, X, uhat, Hₙ, WT, rep, m, w)
     q = quantile(β./σ, [.025, .05, .95,.975])
+    (β, σ, q)
 end
 
 function fastwildboot_nonull(f::GLM.AbstractGLM, m::LinearRegressionCluster, WT::WildWeights; rep::Int = 999)
     wts  = f.rr.wts
-    is_weighted = !all(wts[1]==wts)
+    is_weighted = !all(wts.==1)
     sqwts = m.sqwts
-    betahat = first(coef(f))
-    Y = f.rr.y
+    betahat = first(coef(f))    
     Hₙ = first(inv(f.pp.chol))
     uhat = CovarianceMatrices.wrkresidwts(f.rr)
     if is_weighted
-        X = m.X.*sqwts        
+        Y = f.rr.y.*sqwts
+        X = m.X.*sqwts
         w = Val{:weighted}
     else
+        Y = f.rr.y
         X = copy(m.X)
         w = Val{:unweighted}
     end
-    β, σ = _wildboot_nonull(Y, X, uhat, betahat, Hₙ, WT, rep, m, w)
+    β, σ = Clusters._wildboot_nonull(Y, X, uhat, betahat, Hₙ, WT, rep, m)
     q = quantile((β-betahat)./σ, [.025, .05, .95,.975])
     (β, σ, q)
 end
 
-function _wildboot_null(Y, X, uhat, Hₙ, WT, rep, m::LinearRegressionCluster, w)
+function _wildboot_null(Y, X, uhat, Hₙ, WT, rep, m::LinearRegressionCluster)
     ustar = similar(uhat)
     bstarts = m.bstarts    
     G = length(bstarts)
@@ -442,63 +444,62 @@ function _wildboot_null(Y, X, uhat, Hₙ, WT, rep, m::LinearRegressionCluster, w
     cr = CRHC1(m.cl)
     cX = similar(X)
     for h in 1:rep
-        wbweights!(WT, W)
+        Clusters.wbweights!(WT, W)
         s = 0.0
         for r = 1:G            
             @inbounds for i = bstarts[r]
-                ϵ  = uhat[i]*W[r]
-                s += Hₙ*X[i]*ϵ
+                ustar[i]  = uhat[i]*W[r]
+                s += X[i]*ustar[i]
             end
         end
         ## 
-        β[h] = s
+        β[h] = Hₙ*s
         ## Calculate the variance
-        copy!(ustar, Y)        
+        ## copy!(ustar, uhat)        
         @simd for j in eachindex(ustar)
-            @inbounds ustar[j] = ustar[j] - X[j]*s
+            @inbounds ustar[j] -=  X[j]*Hₙ*s
         end
-        B = fastmeat(Hₙ, ustar, copy!(cX, X), m, cr, w)        
+        B = Clusters.fastmeat(Hₙ, ustar, copy!(cX, X), m, cr)        
         σ[h] = sqrt(B*Hₙ^2)
     end
     (β, σ)
 end
 
-function _wildboot_nonull(Y, X, uhat, betahat, Hₙ, WT, rep, m::LinearRegressionCluster, w::T) where T
+function _wildboot_nonull(Y, X, uhat, betahat, Hₙ, WT, rep, m::LinearRegressionCluster)
     ustar = similar(uhat)
     bstarts = m.bstarts
-    
     G = length(bstarts)
     ## Containers
     W = Array{Float32}(G)
     β = Array{Float64}(rep)
     σ = Array{Float64}(rep)
     cr = CRHC1(m.cl)
-    cX = similar(X)
+    cX = similar(X)    
     for h in 1:rep
-        wbweights!(WT, W)
+        Clusters.wbweights!(WT, W)
         s = 0.0        
         for r = 1:G            
             @inbounds for i = bstarts[r]
-                ϵ = uhat[i]*W[r]
-                s += Hₙ*X[i]*ϵ
+                ustar[i] = uhat[i]*W[r]
+                s += X[i]*ustar[i]
             end
         end
         ## 
-        β[h] = betahat .+ s
-        copy!(ustar, Y)        
+        β[h] = betahat .+ Hₙ*s
+        #copy!(ustar, uhat)
         @simd for j in eachindex(ustar)
-            @inbounds ustar[j] = ustar[j] - X[j]*β[h]
+            @inbounds ustar[j] -= X[j]*Hₙ*s
         end
-        B = fastmeat(Hₙ, ustar, copy!(cX, X), m, cr, w)        
+        B = Clusters.fastmeat(Hₙ, ustar, copy!(cX, X), m, cr)        
         σ[h] = sqrt(B*Hₙ^2)
     end
     (β, σ)
 end
 
-function wbweights!(x::Rademacher, W::Vector{Float32}, bstarts)
+function wbweights!(x::Rademacher, W::Vector{Float32})
     G = length(W)
     for m = 1:G
-        W[m] = rand() > 0.5 ? 1.0 : -1.0
+        W[m] = rand() < 0.5 ? 1.0 : -1.0
     end
 end
 
@@ -508,7 +509,7 @@ function wbweights!(x::TwoPoint, W::Vector{Float32})
     p = (s5 + 1.0)/(2*s5)
     for m = 1:G
         s = 0.0
-        W[m] = rand() < p ? (1 - s5)/2 : (1 + s5)/2
+        W[m] = rand() < p ? (1 + s5)/2 : -(s5-1)/2
     end
 end
 
