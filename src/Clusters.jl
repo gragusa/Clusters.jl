@@ -250,7 +250,7 @@ function estimatemodel(m::LinearRegressionCluster)
     iter = m.iter
     w  = Val{:weighted}
     uw = Val{:unweighted}
-    #try
+    try
         fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
 
         theta_u = first(coef(fitted_u))
@@ -284,9 +284,9 @@ function estimatemodel(m::LinearRegressionCluster)
         qu0[1], qu0[4], qu0[2], qu0[3],
         theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
         qw0[1], qw0[4], qw0[2], qw0[3]]
-    # catch
-    #     fill(NaN, 28)
-    # end
+    catch
+         fill(NaN, 28)
+     end
 end
 
 ##=
