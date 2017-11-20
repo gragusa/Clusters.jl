@@ -39,6 +39,22 @@ out = estimatemodel(m)
             @test out[19] ≈  0.0427102 atol = 0.0001 ## HC std
             @test out[20] ≈  0.0487519 atol = 0.0001 ## CRHC1 std
       end
+      @testset "Check correctness of parameters"            
+            σ_ϵ = m.opt.σ_z
+            σ_α = m.opt.σ_ξ
+            σ_z = m.opt.σ_z
+            σ_ξ = m.opt.σ_ξ 
+            γ   = m.opt.γ
+            p   = m.opt.p
+            ## The parameters are std. dev
+            @test σ_ϵ == 1
+            @test σ_α == 1/9
+            @test σ_z == 1
+            @test σ_ξ == 1/9
+            ## Check ICC of regressors and errors
+            @test icc_x(m) == σ_ξ^2/(σ_z^2+σ_ξ^2)
+            @test icc_u(m) == σ_α^2/(σ_ϵ^2+σ_α^2)
+      end
 end
 
 #=
