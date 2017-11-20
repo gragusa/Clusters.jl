@@ -44,16 +44,29 @@ struct LinearRegressionClusterOpt <: MonteCarloModelOpt
     design::Int
 end
 
+function dispersion_ng(m::LinearRegressionClusterOpt)
+    sum(m.ng^2)/sum(ng)^2
+end
+
+
 function icc_x(m::LinearRegressionClusterOpt)
-    σ_z = m.σ_z
-    σ_ξ = m.σ_ξ
-    σ_ξ/(σ_ξ+σ_z)
+        σ_z = m.σ_z
+        σ_ξ = m.σ_ξ
+        σ_ξ^2/(σ_ξ^2+σ_z^2)
 end
 
 function icc_u(m::LinearRegressionClusterOpt)
     σ_ϵ = m.σ_z
     σ_α = m.σ_ξ
-    σ_α/(σ_α+σ_ϵ)
+    σ_z = m.σ_z
+    γ   = m.γ
+    p   = m.p
+    σ_ξ = m.σ_ξ    
+    if m.design < 3        
+        σ_α^2/(σ_α^2+σ_ϵ^2)
+    else
+        (σ_α^2 + (1-p)*p*γ^2*σ_ξ^2)/(σ_α^2 + σ_ϵ^2 + (1-p)*p*γ^2*(1+σ_ξ^2))
+    end
 end
 
 icc_x(m::LinearRegressionCluster) = icc_x(m.opt)
