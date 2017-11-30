@@ -1,7 +1,7 @@
 using Clusters
 using DataFrames
 using Base.Test
-
+using CovarianceMatrices
 ## Two test.
 
 #=
@@ -13,7 +13,36 @@ df = readtable("test.txt")
 ng = vec(readcsv("states.txt", header = true)[1])
 ng = floor.(Int64, ng./5000)
 
-opt = LinearRegressionClusterOpt(length(ng), ng, 1, 1/9, 1, 1/9, 0.0, 0.0, 0.0, 1)
+# G::Int64
+# ng::Vector{Int64}
+# ## Regressors std. dev.
+# σ_z::Float64
+# σ_ξ::Float64
+# ## Errors std. dev
+# σ_ϵ::Float64
+# σ_α::Float64
+# ## Third/Fourth design parms
+# p::Float64
+# γ::Float64
+# δ::Float64
+# σ_η::Float64
+# μ_q::Float64
+# ## Null value
+# β₀::Float64
+# design::Int
+
+opt = LinearRegressionClusterOpt(length(ng), ng,
+                                  1,  ## σ_z
+                                1/9,  ## σ_ξ
+                                  1,  ## σ_ϵ
+                                1/9,  ## σ_α
+                                0.0,  ## p
+                                0.0,  ## γ
+                                0.0,  ## δ
+                                0.0,  ## σ_η
+                                0.0,  ## μ_q
+                                0.0,  ## β₀
+                                  1)
 m = initialize(LinearRegressionCluster, opt)
 simulate!(m)
 ## Inject data from test.txt
@@ -39,11 +68,11 @@ out = estimatemodel(m)
             @test out[19] ≈  0.0427102 atol = 0.0001 ## HC std
             @test out[20] ≈  0.0487519 atol = 0.0001 ## CRHC1 std
       end
-      @testset "Check correctness of parameters"            
+      @testset "Check correctness of parameters"
             σ_ϵ = m.opt.σ_z
             σ_α = m.opt.σ_ξ
             σ_z = m.opt.σ_z
-            σ_ξ = m.opt.σ_ξ 
+            σ_ξ = m.opt.σ_ξ
             γ   = m.opt.γ
             p   = m.opt.p
             ## The parameters are std. dev
@@ -80,4 +109,233 @@ out = montecarlo(LinearRegressionCluster, opt)
       @test coverage(ciwb, 0) ≈ 0.90 atol = 0.04
       ciwb = ConfInterval(out[:theta_u], out[:V3_u], out[:qu0_050], out[:qu0_950])
       @test coverage(ciwb, 0) ≈ 0.90 atol = 0.04
+end
+
+function run_montecarlo(d, sim)
+      dd = Array{Float64}(sim)
+      od = similar(dd)
+      N = length(d.opt.ng)
+      ng = maximum(d.opt.ng)
+      M = Array{Float64}(ng,ng);
+
+      for i in 1:sim
+            simulate!(d)
+            fill!(M, 0.0)
+            for j in d.bstarts
+                  E = d.y[j]
+                  M = M + E*E'./N
+            end
+            dd[i] = mean(diag(M))
+            od[i] = M[1,2]
+      end
+      (dd, od)
+end
+
+ci_lower_lim(x, z = 2.5) = mean(x) - z*std(x)/sqrt(length(x))
+ci_upper_lim(x, z = 2.5) = mean(x) + z*std(x)/sqrt(length(x))
+
+theoretical_Λ_ii(d, ::Type{Val{1}}) = d.opt.σ_ϵ^2+d.opt.σ_α^2
+theoretical_Λ_ik(d, ::Type{Val{1}}) = d.opt.σ_α^2
+
+
+theoretical_Λ_ii(d, ::Type{Val{2}}) = theoretical_Λ_ii(d, Val{1})
+theoretical_Λ_ik(d, ::Type{Val{2}}) = theoretical_Λ_ik(d, Val{1})
+
+
+function theoretical_Λ_ik(d, ::Type{Val{3}})
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      σ_α^2+γ^2*(1-p)*p*σ_ξ^2
+end
+
+function theoretical_Λ_ii(d, ::Type{Val{3}})
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      σ_ϵ^2 + σ_α^2+γ^2*(1-p)*p*(1+σ_ξ^2)
+end
+
+function theoretical_Λ_ik(d, ::Type{Val{4}})
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      a = σ_η^2 + δ*σ_ξ^2*(2*δ + 3*μ_q) + δ^2*σ_z^2
+      γ^2*σ_ξ^2*a
+end
+
+function theoretical_Λ_ii(d, ::Type{Val{4}})
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      a = 2*δ^2*σ_ξ^4
+      b = σ_ξ^2*(σ_η^2 + μ_q^2 + δ^2*σ_z^2)
+      c = σ_z^2*(σ_η^2 + μ_q^2)            
+      1 + γ^2*(a+b+c)
+end
+
+function theoretical_Λ_ik_noapprox(d, ::Type{Val{4}})
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)      
+      n = d.opt.ng[1]
+      a = δ^2*( σ_ξ^2*(σ_z^2+3*σ_ξ^2)*(3*n-4) + (n-1)^2*3*σ_ξ^4)/n^2
+      b = σ_η^2*(σ_z^2+σ_ξ^2)
+      Eu = γ*δ*(σ_z^2 + n*σ_ξ^2)/n
+      γ^2*(a + b) - Eu^2
+end
+
+function theoretical_Λ_ii_noapprox(d, ::Type{Val{4}})
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      n = d.opt.ng[1]
+      a = (μ_q^2 + σ_η^2)*(σ_z^2+σ_ξ^2)
+      b = (2*δ*μ_q*(n-1)*σ_ξ^2)/n
+      c = (3*n*σ_ξ^4 + 2*(n+2)*σ_ξ^2*σ_z^2 + (n-2)*(n-1)*σ_ξ^2*(3σ_ξ^2 + σ_z^2) + (n+2)*σ_z^4)/n^2
+      Eu = γ*δ*(σ_z^2 + n*σ_ξ^2)/n
+      1 + γ^2*(a+b+c) - Eu^2
+end
+
+
+
+const sim = 200
+
+@testset "Design 1" begin
+      ng = repeat([2], outer=20000)
+      opt = LinearRegressionClusterOpt(length(ng), ng,
+                                       1,    ## σ_z
+                                       1/9,  ## σ_ξ
+                                       1,    ## σ_ϵ
+                                       1/9,  ## σ_α
+                                       0.0,  ## p
+                                       0.0,  ## γ
+                                       0.0,  ## δ
+                                       0.0,  ## σ_η
+                                       0.0,  ## μ_q
+                                       0.0,  ## β₀
+                                        1)   ## Desing
+
+      d = initialize(LinearRegressionCluster, opt)
+      simulate!(d)
+
+      Λ_ii, Λ_ik = run_montecarlo(d, sim)
+      @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{1})
+      @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{1})
+
+      @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{1})
+      @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{1})
+end
+
+@testset "Design 2" begin
+      ng = repeat([2], outer=20000)
+
+      opt = LinearRegressionClusterOpt(length(ng), ng,
+                                       1,    ## σ_z
+                                       1/9,  ## σ_ξ
+                                       1,    ## σ_ϵ
+                                       1/9,  ## σ_α
+                                       0.0,  ## p
+                                       0.0,  ## γ
+                                       0.0,  ## δ
+                                       0.0,  ## σ_η
+                                       0.0,  ## μ_q
+                                       0.0,  ## β₀
+                                        2)   ## Desing
+
+      d = initialize(LinearRegressionCluster, opt)
+      simulate!(d)
+      srand(1234554321)
+      Λ_ii, Λ_ik = run_montecarlo(d, sim)
+      @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{d.opt.design})
+
+      @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
+
+      opt = LinearRegressionClusterOpt(length(ng), ng,
+                                       1,    ## σ_z
+                                       1/9,  ## σ_ξ
+                                       1,    ## σ_ϵ
+                                       1/2,  ## σ_α
+                                       0.0,  ## p
+                                       0.0,  ## γ
+                                       0.0,  ## δ
+                                       0.0,  ## σ_η
+                                       0.0,  ## μ_q
+                                       0.0,  ## β₀
+                                        2)   ## Desing
+
+      srand(1234554321)
+      Λ_ii, Λ_ik = run_montecarlo(d, sim)
+      @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{d.opt.design})
+
+      @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
+end
+
+@testset "Design 3" begin
+      ng = repeat([2], outer=20000)
+      ## ρᵤ = 0.2  ρₓ = 0.2
+      opt = LinearRegressionClusterOpt(length(ng), ng,
+                                       1,    ## σ_z
+                                       0.5,  ## σ_ξ
+                                       1,    ## σ_ϵ
+                                       0.5,  ## σ_α
+                                       0.5,  ## p
+                                       0.1,  ## γ
+                                       0.0,  ## δ
+                                       0.0,  ## σ_η
+                                       0.0,  ## μ_q
+                                       0.0,  ## β₀
+                                        3)   ## Desing
+
+      d = initialize(LinearRegressionCluster, opt)
+      simulate!(d)
+      srand(1234554321)
+      Λ_ii, Λ_ik = run_montecarlo(d, sim)
+      @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
+end
+
+@testset "Design 4" begin
+      ## This test that as n_g -> ∞
+      ng = repeat([150], outer=2)
+
+      opt = LinearRegressionClusterOpt(length(ng), ng,
+                                       1, ## σ_z
+                                     0.5, ## σ_ξ
+                                       0, ## σ_ϵ
+                                       0, ## σ_α
+                                     0.0, ## p
+                                    -1.0, ## γ
+                       .9354143466934853, ## δ
+                       .5361902647381804, ## σ_η
+                                    -0.5, ## μ_q
+                                     0.0, ## β₀
+                                       4) ## Design
+
+
+      d = initialize(LinearRegressionCluster, opt)
+      simulate!(d)
+      srand(1234554321)
+      Λ_ii, Λ_ik = run_montecarlo(d, 300)
+      @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
+
+      ng = repeat([250], outer=2)
+      opt = LinearRegressionClusterOpt(length(ng), ng,
+                                        1, ## σ_z
+                                      0.5, ## σ_ξ
+                                        0, ## σ_ϵ
+                                        0, ## σ_α
+                                      0.0, ## p
+                                     -1.0, ## γ
+                        .9354143466934853, ## δ
+                        .5361902647381804, ## σ_η
+                                     -0.5, ## μ_q
+                                      0.0, ## β₀
+                                        4) ## Design
+
+      d = initialize(LinearRegressionCluster, opt)
+      simulate!(d)
+      srand(1234554321)
+      Λ_ii, Λ_ik = run_montecarlo(d, sim)
+      @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{d.opt.design})
+      @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
+      @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
 end
