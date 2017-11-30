@@ -2,6 +2,9 @@ using Clusters
 using DataFrames
 using Base.Test
 using CovarianceMatrices
+
+const sim = 300
+
 ## Two test.
 
 #=
@@ -68,7 +71,7 @@ out = estimatemodel(m)
             @test out[19] ≈  0.0427102 atol = 0.0001 ## HC std
             @test out[20] ≈  0.0487519 atol = 0.0001 ## CRHC1 std
       end
-      @testset "Check correctness of parameters"
+      @testset "Check correctness of parameters" begin
             σ_ϵ = m.opt.σ_z
             σ_α = m.opt.σ_ξ
             σ_z = m.opt.σ_z
@@ -90,21 +93,33 @@ end
 # 2. - Run a Small Montecarlo
 =#
 ng = repeat([30], inner = 30)
-opt = LinearRegressionClusterOpt(length(ng), ng, 1, 1, 1, 1, 0.0, 0.0, 0.0, 1)
+opt = opt = LinearRegressionClusterOpt(length(ng), ng,
+                                       1.0, ## σ_z
+                                       1.0, ## σ_ξ
+                                       1.0, ## σ_ϵ
+                                       1.0, ## σ_α
+                                       0.0, ## p
+                                       0.0, ## γ
+                                       0.0, ## δ
+                                       0.0, ## σ_η
+                                       0.0, ## μ_q
+                                       0.0, ## β₀
+                                       1) ## Design
+
 m = initialize(LinearRegressionCluster, opt)
+srand(1234512345)
 out = montecarlo(LinearRegressionCluster, opt)
 
 @testset "Set 2" begin
       @test maximum(out[:theta_u] -  out[:theta_w]) ≈ 0 atol = 1e-10
       ## Confidence interval
       ci = ConfInterval(out[:theta_u], out[:V3_u], 1.96)
-      @test average_length(ci)
+      @test average_length(ci) <= 0.4
       ## Construct WB confidence interval
       ciwb = ConfInterval(out[:theta_w], out[:V3_w], out[:qw0_025], out[:qw0_975])
-      @test coverage(ciwb, 0) ≈ 0.95 atol = 0.01
+      @test coverage(ciwb, 0) ≈ 0.93 atol = 0.01
       ciwb = ConfInterval(out[:theta_u], out[:V3_u], out[:qu0_025], out[:qu0_975])
-      coverage(ciwb, 0)
-      @test coverage(ciwb, 0) ≈ 0.95 atol = 0.01
+      @test coverage(ciwb, 0) ≈ 0.93 atol = 0.01
       ciwb = ConfInterval(out[:theta_w], out[:V3_w], out[:qw0_050], out[:qw0_950])
       @test coverage(ciwb, 0) ≈ 0.90 atol = 0.04
       ciwb = ConfInterval(out[:theta_u], out[:V3_u], out[:qu0_050], out[:qu0_950])
@@ -143,54 +158,34 @@ theoretical_Λ_ik(d, ::Type{Val{2}}) = theoretical_Λ_ik(d, Val{1})
 
 
 function theoretical_Λ_ik(d, ::Type{Val{3}})
-      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = Clusters.getparms(d)
       σ_α^2+γ^2*(1-p)*p*σ_ξ^2
 end
 
 function theoretical_Λ_ii(d, ::Type{Val{3}})
-      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = Clusters.getparms(d)
       σ_ϵ^2 + σ_α^2+γ^2*(1-p)*p*(1+σ_ξ^2)
 end
 
 function theoretical_Λ_ik(d, ::Type{Val{4}})
-      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = Clusters.getparms(d)
       a = σ_η^2 + δ*σ_ξ^2*(2*δ + 3*μ_q) + δ^2*σ_z^2
       γ^2*σ_ξ^2*a
 end
 
 function theoretical_Λ_ii(d, ::Type{Val{4}})
-      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
+      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = Clusters.getparms(d)
       a = 2*δ^2*σ_ξ^4
       b = σ_ξ^2*(σ_η^2 + μ_q^2 + δ^2*σ_z^2)
       c = σ_z^2*(σ_η^2 + μ_q^2)            
       1 + γ^2*(a+b+c)
 end
 
-function theoretical_Λ_ik_noapprox(d, ::Type{Val{4}})
-      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)      
-      n = d.opt.ng[1]
-      a = δ^2*( σ_ξ^2*(σ_z^2+3*σ_ξ^2)*(3*n-4) + (n-1)^2*3*σ_ξ^4)/n^2
-      b = σ_η^2*(σ_z^2+σ_ξ^2)
-      Eu = γ*δ*(σ_z^2 + n*σ_ξ^2)/n
-      γ^2*(a + b) - Eu^2
-end
-
-function theoretical_Λ_ii_noapprox(d, ::Type{Val{4}})
-      (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = getparms(d)
-      n = d.opt.ng[1]
-      a = (μ_q^2 + σ_η^2)*(σ_z^2+σ_ξ^2)
-      b = (2*δ*μ_q*(n-1)*σ_ξ^2)/n
-      c = (3*n*σ_ξ^4 + 2*(n+2)*σ_ξ^2*σ_z^2 + (n-2)*(n-1)*σ_ξ^2*(3σ_ξ^2 + σ_z^2) + (n+2)*σ_z^4)/n^2
-      Eu = γ*δ*(σ_z^2 + n*σ_ξ^2)/n
-      1 + γ^2*(a+b+c) - Eu^2
-end
 
 
-
-const sim = 200
 
 @testset "Design 1" begin
-      ng = repeat([2], outer=20000)
+      ng = repeat([2], outer=2000)
       opt = LinearRegressionClusterOpt(length(ng), ng,
                                        1,    ## σ_z
                                        1/9,  ## σ_ξ
@@ -206,7 +201,7 @@ const sim = 200
 
       d = initialize(LinearRegressionCluster, opt)
       simulate!(d)
-
+      srand(1234554321)
       Λ_ii, Λ_ik = run_montecarlo(d, sim)
       @test ci_lower_lim(Λ_ii) <= theoretical_Λ_ii(d, Val{1})
       @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{1})
@@ -216,7 +211,7 @@ const sim = 200
 end
 
 @testset "Design 2" begin
-      ng = repeat([2], outer=20000)
+      ng = repeat([2], outer=2000)
 
       opt = LinearRegressionClusterOpt(length(ng), ng,
                                        1,    ## σ_z
