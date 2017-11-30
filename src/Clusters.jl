@@ -19,6 +19,7 @@ struct LinearRegressionCluster{G} <: MonteCarloModel
     eta::Array{Float64, 1}
     D::Array{Float64, 1}
     sigma_e::Array{Float64, 1}
+    x̄::Array{Float64, 1}
     cl::Array{Int64, 1}
     iter::Array{Int64, 1}
     bstarts::Array{UnitRange{Int64},1}
@@ -36,9 +37,12 @@ struct LinearRegressionClusterOpt <: MonteCarloModelOpt
     ## Errors std. dev
     σ_ϵ::Float64
     σ_α::Float64
-    ## Third design parms
+    ## Third/Fourth design parms
     p::Float64
     γ::Float64
+    δ::Float64
+    σ_η::Float64
+    μ_q::Float64
     ## Null value
     β₀::Float64
     design::Int
@@ -143,76 +147,152 @@ function initialize(::Type{LinearRegressionCluster}, opt)
     eta = Array{Float64}(G)
     D = similar(eta)
     sigma_e = similar(y)
-    LinearRegressionCluster(y, X, epsilon, eta, D, sigma_e, cl, iter, bstarts, wts, sqwts, opt)
+    x̄ = similar(eta)
+    LinearRegressionCluster(y, X, epsilon, eta, D, sigma_e, x̄, cl, iter, bstarts, wts, sqwts, opt)
 end
 
-function simulate!(m::LinearRegressionCluster)
-    clus = m.cl
-    iter = m.iter
+function getcontainers(m::LinearRegressionCluster)
+    (m.X, m.y, m.epsilon, m.eta, m.D, m.sigma_e, m.x̄)
+end
 
-    ## Container
-    X = m.X
-    y = m.y
-    D = m.D
-    η = m.eta
-    ϵ = m.epsilon
-    σₑ= m.sigma_e
+function getparms(m::LinearRegressionCluster)    
+    (m.opt.σ_z,
+    m.opt.σ_ξ,
+    m.opt.σ_ϵ,
+    m.opt.σ_α,
+    m.opt.p,
+    m.opt.γ,
+    m.opt.δ,
+    m.opt.σ_η,
+    m.opt.μ_q)
+end
 
-    ## Parameters
-    β₀  = m.opt.β₀
-    σ_ξ = m.opt.σ_ξ
-    σ_z = m.opt.σ_z
-    σ_ϵ = m.opt.σ_ϵ
-    σ_α = m.opt.σ_α
-    γ  = m.opt.γ
-    p  = m.opt.p
-    ρₓ = icc_x(m)
-    κ  = sqrt((π/2)*(1-ρₓ))
-    ς  = sqrt(ρₓ/(1-ρₓ))
+function gethyper(m::LinearRegressionCluster)    
+    (m.cl, m.iter, m.bstarts)
+end
 
-    ## Simulate regressors
 
-    randn!(η)
-    scale!(η, σ_ξ)
+function simulate!(m::LinearRegressionCluster, ::Type{Val{1}})
+    X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    clus, iter, bstarts = gethyper(m)
+
+    
+    ## GENERATE X = z + ξ
     randn!(X)
     scale!(X, σ_z)
+    randn!(η)
+    scale!(η, σ_ξ)
     for (i, (n, g)) in enumerate(zip(iter, clus))
         X[i] += η[g]
     end
 
-    ## Simulate error
-
+    ## GENERATE u = α + ξ
     randn!(ϵ)
     scale!(ϵ, σ_ϵ)
-    ## Design == 2 (heteroskedastic)
-    if m.opt.design == 2
-        for i in eachindex(ϵ)
-            ϵ[i] = κ.*sqrt(abs(X[i]))
-        end
+    randn!(η)
+    scale!(η, σ_α)
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        ϵ[i] += η[g]
+    end
+end
+
+function simulate!(m::LinearRegressionCluster, ::Type{Val{2}})
+    X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    clus, iter, bstarts = gethyper(m)
+    κ  = sqrt(π/(2*(σ_z^2+σ_ξ^2)))
+    
+    ## GENERATE X = z + ξ
+    randn!(X)
+    scale!(X, σ_z)
+    randn!(η)
+    scale!(η, σ_ξ)
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        X[i] += η[g]
     end
 
+    ## GENERATE u = α + ξ
+    randn!(ϵ)    
+    for i in eachindex(ϵ)
+        ϵ[i] *= sqrt(κ.*abs(X[i]))
+    end
+    randn!(η)
+    scale!(η, σ_α)
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        ϵ[i] += η[g]
+    end
+end
+
+function simulate!(m::LinearRegressionCluster, ::Type{Val{3}})
+    X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    clus, iter, bstarts = gethyper(m)
+
+    
+    ## GENERATE X = z + ξ
+    randn!(X)
+    scale!(X, σ_z)
+    randn!(η)
+    scale!(η, σ_ξ)
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        X[i] += η[g]
+    end
+
+    ## GENERATE u = α + ξ
+    randn!(ϵ)
+    scale!(ϵ, σ_ϵ)
     randn!(η)
     scale!(η, σ_α)
     for (i, (n, g)) in enumerate(zip(iter, clus))
         ϵ[i] += η[g]
     end
 
-    ## Design == 3 (heterogenous)
-    if m.opt.design == 3
-        rand!(η)
-        for i in eachindex(D)
-            D[i] = ifelse(η[i] .<= p, 1-p, p)
-        end
-        for (i, (n, g)) in enumerate(zip(iter, clus))
-            ϵ[i] += γ*(X[i]*D[g])
-        end
+    rand!(η)
+    for i in eachindex(D)
+        D[i] = ifelse(η[i] .<= p, 1-p, -p)
+    end
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        ϵ[i] += γ*X[i]*D[g]
+    end
+end
+
+function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
+    X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    clus, iter, bstarts = gethyper(m)    
+    ## GENERATE X = z + ξ
+    randn!(X)
+    scale!(X, σ_z)
+    randn!(η)
+    scale!(η, σ_ξ)
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        X[i] += η[g]
+    end
+    ## GENERATE u = α + ξ
+    randn!(η)
+    scale!(η, σ_η)    
+    for (i, j) in enumerate(bstarts)
+        x̄[i] = mean(X[j])
+        η[i] += μ_q + δ*x̄[i] 
     end
 
-    ## Change this when the power is sought
-    @simd for i in eachindex(y)
+    randn!(ϵ)
+    for (i, (n, g)) in enumerate(zip(iter, clus))
+        ϵ[i] += γ*X[i]*η[g]
+    end
+
+end
+
+function simulate!(m::LinearRegressionCluster)
+    X, y, ϵ, _ = getcontainers(m)
+    β₀ = m.opt.β₀
+    design = m.opt.design
+    simulate!(m, Val{design})
+     ## Change this when the power is sought
+     @simd for i in eachindex(y)
         @inbounds y[i] = X[i].*β₀ + ϵ[i]
     end
-
 end
 
 function montecarlo(m::Type{T} where T <: MonteCarloModel, opt::MonteCarloModelOpt; simulations::Int64 = 1000)
@@ -506,6 +586,8 @@ function wbweights!(x::TwoPoint, W::Vector{Float32})
     end
 end
 
-export LinearRegressionCluster, simulate!, montecarlo, initialize!, ConfInterval, coverage, average_length
+export LinearRegressionCluster, LinearRegressionClusterOpt, 
+       initialize, simulate!, estimatemodel, montecarlo, 
+       ConfInterval, coverage, average_length, icc_x, icc_u
 
 end
