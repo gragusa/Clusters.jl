@@ -93,7 +93,8 @@ end
 # 2. - Run a Small Montecarlo
 =#
 ng = repeat([30], inner = 30)
-opt = opt = LinearRegressionClusterOpt(length(ng), ng,
+opt = opt = LinearRegressionClusterOpt(length(ng),
+                                       ng,
                                        1.0, ## σ_z
                                        1.0, ## σ_ξ
                                        1.0, ## σ_ϵ
@@ -177,12 +178,9 @@ function theoretical_Λ_ii(d, ::Type{Val{4}})
       (σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q) = Clusters.getparms(d)
       a = 2*δ^2*σ_ξ^4
       b = σ_ξ^2*(σ_η^2 + μ_q^2 + δ^2*σ_z^2)
-      c = σ_z^2*(σ_η^2 + μ_q^2)            
+      c = σ_z^2*(σ_η^2 + μ_q^2)
       1 + γ^2*(a+b+c)
 end
-
-
-
 
 @testset "Design 1" begin
       ng = repeat([2], outer=2000)
@@ -286,7 +284,7 @@ end
 
 @testset "Design 4" begin
       ## This test that as n_g -> ∞
-      ng = repeat([150], outer=2)
+      ng = repeat([150], outer=500)
 
       opt = LinearRegressionClusterOpt(length(ng), ng,
                                        1, ## σ_z
@@ -297,7 +295,7 @@ end
                                     -1.0, ## γ
                        .9354143466934853, ## δ
                        .5361902647381804, ## σ_η
-                                    -0.5, ## μ_q
+                                     0.5, ## μ_q
                                      0.0, ## β₀
                                        4) ## Design
 
