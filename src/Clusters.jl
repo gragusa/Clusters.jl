@@ -54,9 +54,9 @@ end
 
 
 function icc_x(m::LinearRegressionClusterOpt)
-        σ_z = m.σ_z
-        σ_ξ = m.σ_ξ
-        σ_ξ^2/(σ_ξ^2+σ_z^2)
+    σ_z = m.σ_z
+    σ_ξ = m.σ_ξ
+    σ_ξ^2/(σ_ξ^2+σ_z^2)
 end
 
 function icc_u(m::LinearRegressionClusterOpt)
@@ -65,8 +65,8 @@ function icc_u(m::LinearRegressionClusterOpt)
     σ_z = m.σ_z
     γ   = m.γ
     p   = m.p
-    σ_ξ = m.σ_ξ    
-    if m.design < 3        
+    σ_ξ = m.σ_ξ
+    if m.design < 3
         σ_α^2/(σ_α^2+σ_ϵ^2)
     else
         (σ_α^2 + (1-p)*p*γ^2*σ_ξ^2)/(σ_α^2 + σ_ϵ^2 + (1-p)*p*γ^2*(1+σ_ξ^2))
@@ -92,7 +92,7 @@ function ConfInterval(m::Array{Float64}, σ::Array{Float64}, z::Float64 = 1.96)
 end
 
 function ConfInterval(m::Array{Float64}, σ::Array{Float64},
-                      zl::Array{Float64}, zh::Array{Float64})
+    zl::Array{Float64}, zh::Array{Float64})
     @assert length(m) == length(σ)
     @assert length(m) == length(zh)
     @assert length(zl) == length(zh)
@@ -155,7 +155,7 @@ function getcontainers(m::LinearRegressionCluster)
     (m.X, m.y, m.epsilon, m.eta, m.D, m.sigma_e, m.x̄)
 end
 
-function getparms(m::LinearRegressionCluster)    
+function getparms(m::LinearRegressionCluster)
     (m.opt.σ_z,
     m.opt.σ_ξ,
     m.opt.σ_ϵ,
@@ -167,7 +167,7 @@ function getparms(m::LinearRegressionCluster)
     m.opt.μ_q)
 end
 
-function gethyper(m::LinearRegressionCluster)    
+function gethyper(m::LinearRegressionCluster)
     (m.cl, m.iter, m.bstarts)
 end
 
@@ -176,8 +176,6 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{1}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
     σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
     clus, iter, bstarts = gethyper(m)
-
-    
     ## GENERATE X = z + ξ
     randn!(X)
     scale!(X, σ_z)
@@ -186,7 +184,6 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{1}})
     for (i, (n, g)) in enumerate(zip(iter, clus))
         X[i] += η[g]
     end
-
     ## GENERATE u = α + ξ
     randn!(ϵ)
     scale!(ϵ, σ_ϵ)
@@ -202,7 +199,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{2}})
     σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
     clus, iter, bstarts = gethyper(m)
     κ  = sqrt(π/(2*(σ_z^2+σ_ξ^2)))
-    
+
     ## GENERATE X = z + ξ
     randn!(X)
     scale!(X, σ_z)
@@ -213,7 +210,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{2}})
     end
 
     ## GENERATE u = α + ξ
-    randn!(ϵ)    
+    randn!(ϵ)
     for i in eachindex(ϵ)
         ϵ[i] *= sqrt(κ.*abs(X[i]))
     end
@@ -229,7 +226,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{3}})
     σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
     clus, iter, bstarts = gethyper(m)
 
-    
+
     ## GENERATE X = z + ξ
     randn!(X)
     scale!(X, σ_z)
@@ -260,7 +257,7 @@ end
 function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
     σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
-    clus, iter, bstarts = gethyper(m)    
+    clus, iter, bstarts = gethyper(m)
     ## GENERATE X = z + ξ
     randn!(X)
     scale!(X, σ_z)
@@ -271,10 +268,10 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
     end
     ## GENERATE u = α + ξ
     randn!(η)
-    scale!(η, σ_η)    
+    scale!(η, σ_η)
     for (i, j) in enumerate(bstarts)
         x̄[i] = mean(X[j])
-        η[i] += μ_q + δ*x̄[i] 
+        η[i] += μ_q + δ*x̄[i]
     end
 
     randn!(ϵ)
@@ -289,8 +286,8 @@ function simulate!(m::LinearRegressionCluster)
     β₀ = m.opt.β₀
     design = m.opt.design
     simulate!(m, Val{design})
-     ## Change this when the power is sought
-     @simd for i in eachindex(y)
+    ## Change this when the power is sought
+    @simd for i in eachindex(y)
         @inbounds y[i] = X[i].*β₀ + ϵ[i]
     end
 end
@@ -311,14 +308,14 @@ function montecarlo(m::Type{T} where T <: MonteCarloModel, opt::MonteCarloModelO
     res = convert(DataFrame, convert(Array,res))
     names!(res,
     [:theta_u, :V1_u, :V2_u, :V3_u, :V4_u, :V5_u,
-     :G_u, :k_u,
-     :qu_025, :qu_975,
-     :qu_050, :qu_950,
-     :qu0_025, :qu0_975,
-     :qu0_050, :qu0_950,
-     :theta_w, :V1_w, :V2_w, :V3_w, :V4_w, :V5_w,
-     :G_w, :k_w,
-     :qw0_025, :qw0_975, :qw0_050, :qw0_950])
+    :G_u, :k_u,
+    :qu_025, :qu_975,
+    :qu_050, :qu_950,
+    :qu0_025, :qu0_975,
+    :qu0_050, :qu0_950,
+    :theta_w, :V1_w, :V2_w, :V3_w, :V4_w, :V5_w,
+    :G_w, :k_w,
+    :qw0_025, :qw0_975, :qw0_050, :qw0_950])
 
 end
 
@@ -365,8 +362,8 @@ function estimatemodel(m::LinearRegressionCluster)
         theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
         qw0[1], qw0[4], qw0[2], qw0[3]]
     catch
-         fill(NaN, 28)
-     end
+        fill(NaN, 28)
+    end
 end
 
 ##=
@@ -385,7 +382,7 @@ function faststderr(f::GLM.AbstractGLM, m::LinearRegressionCluster, v::Covarianc
 end
 
 function fastmeat(f::GLM.AbstractGLM, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC,
-                  w::Type{Val{:unweighted}})
+    w::Type{Val{:unweighted}})
     cl = m.cl
     bstarts = m.bstarts
     ichol  = inv(cholfact(f.pp))::Array{Float64, 2}
@@ -395,7 +392,7 @@ function fastmeat(f::GLM.AbstractGLM, m::LinearRegressionCluster, v::CovarianceM
 end
 
 function fastmeat(f::GLM.AbstractGLM, m::LinearRegressionCluster, v::CovarianceMatrices.CRHC,
-                  w::Type{Val{:weighted}})
+    w::Type{Val{:weighted}})
     cl = m.cl
     bstarts = m.bstarts
     ichol  = inv(cholfact(f.pp))::Array{Float64, 2}
@@ -528,7 +525,7 @@ function _wildboot_null(Y, X, uhat, Hₙ, WT, rep, m::LinearRegressionCluster)
         end
         ##
         β[h] = Hₙ*s
-        ## Calculate the variance        
+        ## Calculate the variance
         @simd for j in eachindex(ustar)
             @inbounds ustar[j] -= X[j]*Hₙ*s
         end
@@ -586,8 +583,8 @@ function wbweights!(x::TwoPoint, W::Vector{Float32})
     end
 end
 
-export LinearRegressionCluster, LinearRegressionClusterOpt, 
-       initialize, simulate!, estimatemodel, montecarlo, 
-       ConfInterval, coverage, average_length, icc_x, icc_u
+export LinearRegressionCluster, LinearRegressionClusterOpt,
+initialize, simulate!, estimatemodel, montecarlo,
+ConfInterval, coverage, average_length, icc_x, icc_u
 
 end
