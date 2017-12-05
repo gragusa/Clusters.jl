@@ -284,7 +284,7 @@ end
 
 @testset "Design 4" begin
       ## This test that as n_g -> ∞
-      ng = repeat([150], outer=500)
+      ng = repeat([150], outer=15)
 
       opt = LinearRegressionClusterOpt(length(ng), ng,
                                        1, ## σ_z
@@ -295,7 +295,7 @@ end
                                     -1.0, ## γ
                        .9354143466934853, ## δ
                        .5361902647381804, ## σ_η
-                                     0.5, ## μ_q
+                                     -0.5, ## μ_q
                                      0.0, ## β₀
                                        4) ## Design
 
@@ -309,7 +309,7 @@ end
       @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
       @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
 
-      ng = repeat([250], outer=2)
+      ng = repeat([150], outer=10)
       opt = LinearRegressionClusterOpt(length(ng), ng,
                                         1, ## σ_z
                                       0.5, ## σ_ξ
@@ -331,4 +331,28 @@ end
       @test ci_upper_lim(Λ_ii) >= theoretical_Λ_ii(d, Val{d.opt.design})
       @test ci_lower_lim(Λ_ik) <= theoretical_Λ_ik(d, Val{d.opt.design})
       @test ci_upper_lim(Λ_ik) >= theoretical_Λ_ik(d, Val{d.opt.design})
+end
+
+parm_design_1 = readcsv("parameters/parameters-design1.csv")
+parm_design_2 = readcsv("parameters/parameters-design2.csv")
+parm_design_3 = readcsv("parameters/parameters-design3.csv")
+parm_design_4 = readcsv("parameters/parameters-design4.csv")
+
+@testset "icc_x and icc_u" begin
+      ng = repeat([150], outer=20)
+      rhox = repeat([.2, .5, .9, .99], outer = 4)
+      rhou = repeat([.2, .5, .9, .99], inner = 4)
+      
+
+      parm_design_1 = mapslices(u->[u], parm_design_1, 2)
+      parm_design_2 = mapslices(u->[u], parm_design_2, 2)
+      parm_design_3 = mapslices(u->[u], parm_design_3, 2)
+      parm_design_4 = mapslices(u->[u], parm_design_4, 2)
+
+      for jopt in [parm_design_1, parm_design_2, parm_design_3, parm_design_4]
+            opt = map(u -> LinearRegressionClusterOpt(length(ng), ng, u...), jopt) 
+            @test all(map(u -> icc_x(u), opt) .≈ rhox)
+            @test all(map(u -> icc_u(u), opt) .≈ rhou)
+      end
+   
 end
