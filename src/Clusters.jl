@@ -53,6 +53,30 @@ function dispersion_ng(m::LinearRegressionClusterOpt)
 end
 
 
+function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{1}})
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_α^2/(σ_α^2+σ_ϵ^2)
+end
+
+function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{2}})
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_α^2/(σ_α^2+σ_ϵ^2)
+end
+
+function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{3}})
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    (σ_α^2 + (1-p)*p*γ^2*σ_ξ^2)/(σ_α^2 + σ_ϵ^2 + (1-p)*p*γ^2*(1+σ_ξ^2))
+end
+
+function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{4}})
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    num = γ^2*σ_ξ^2*(δ^2*σ_z^2 + σ_η^2 + δ*(2*δ + 3*μ_q)*σ_ξ^2)
+    den = 1 + γ^2*(σ_z^2*(μ_q^2 + σ_η^2) + (μ_q^2 + δ^2*σ_z^2 + σ_η^2)*σ_ξ^2 + 2*δ^2*σ_ξ^4)
+    num/den
+end
+
+
+
 function icc_x(m::LinearRegressionClusterOpt)
     σ_z = m.σ_z
     σ_ξ = m.σ_ξ
@@ -60,17 +84,7 @@ function icc_x(m::LinearRegressionClusterOpt)
 end
 
 function icc_u(m::LinearRegressionClusterOpt)
-    σ_ϵ = m.σ_z
-    σ_α = m.σ_ξ
-    σ_z = m.σ_z
-    γ   = m.γ
-    p   = m.p
-    σ_ξ = m.σ_ξ
-    if m.design < 3
-        σ_α^2/(σ_α^2+σ_ϵ^2)
-    else
-        (σ_α^2 + (1-p)*p*γ^2*σ_ξ^2)/(σ_α^2 + σ_ϵ^2 + (1-p)*p*γ^2*(1+σ_ξ^2))
-    end
+    icc_u(m, Val{m.design})
 end
 
 icc_x(m::LinearRegressionCluster) = icc_x(m.opt)
@@ -155,22 +169,25 @@ function getcontainers(m::LinearRegressionCluster)
     (m.X, m.y, m.epsilon, m.eta, m.D, m.sigma_e, m.x̄)
 end
 
-function getparms(m::LinearRegressionCluster)
-    (m.opt.σ_z,
-    m.opt.σ_ξ,
-    m.opt.σ_ϵ,
-    m.opt.σ_α,
-    m.opt.p,
-    m.opt.γ,
-    m.opt.δ,
-    m.opt.σ_η,
-    m.opt.μ_q)
+getparms(m::LinearRegressionCluster) = getparms(m.opt)    
+
+function getparms(opt::LinearRegressionClusterOpt)
+    (opt.σ_z,
+    opt.σ_ξ,
+    opt.σ_ϵ,
+    opt.σ_α,
+    opt.p,
+    opt.γ,
+    opt.δ,
+    opt.σ_η,
+    opt.μ_q)
 end
+
+
 
 function gethyper(m::LinearRegressionCluster)
     (m.cl, m.iter, m.bstarts)
 end
-
 
 function simulate!(m::LinearRegressionCluster, ::Type{Val{1}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
