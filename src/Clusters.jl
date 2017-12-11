@@ -364,8 +364,8 @@ function estimatemodel(m::LinearRegressionCluster)
         V4_w = faststderr(fitted_w, m, CRHC2(cl), w)
         V5_w = faststderr(fitted_w, m, CRHC3(cl), w)
 
-        G_u, k_u = kappastar(fitted_u, m)
-        G_w, k_w = kappastar(fitted_w, m)
+        G_u, k_u = kappastar(fitted_u, m, uw)
+        G_w, k_w = kappastar(fitted_w, m, w)
 
         _, _, qw = fastwildboot_nonull(fitted_w, m, Rademacher(), rep = 499)
         _, _, qu = fastwildboot_nonull(fitted_u, m, Rademacher(), rep = 499)
@@ -445,18 +445,23 @@ end
 ##
 ##
 ####################################################################################
-function fastgamma(f::GLM.AbstractGLM, m::LinearRegressionCluster)
+function fastgamma(f::GLM.AbstractGLM, m::LinearRegressionCluster, ::Type{Val{:weighted}})
     A = first(inv(f.pp.chol))
     X = copy(m.X)
-    #w = f.rr.wts
     X .= X.*m.sqwts
     fastgamma(A, X, m.bstarts)
 end
 
+function fastgamma(f::GLM.AbstractGLM, m::LinearRegressionCluster, ::Type{Val{:unweighted}})
+    A = first(inv(f.pp.chol))
+    X = copy(m.X)
+    fastgamma(A, X, m.bstarts)
+end
 
-function kappastar(f::GLM.AbstractGLM, m::LinearRegressionCluster)
+
+function kappastar(f::GLM.AbstractGLM, m::LinearRegressionCluster, w::T) where T
     G = m.opt.G
-    Gamma = fastgamma(f, m)
+    Gamma = fastgamma(f, m, w)
     (Gamma, G/(1+Gamma))
 end
 
