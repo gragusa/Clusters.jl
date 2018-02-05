@@ -48,6 +48,23 @@ struct LinearRegressionClusterOpt <: MonteCarloModelOpt
     design::Int
 end
 
+LinearRegressionClusterOpt(G::Int64,
+                           ng::Vector{Int64},
+                           σ_z::Float64,
+                           σ_ξ::Float64,
+                           σ_ϵ::Float64,
+                           σ_α::Float64,
+                           p::Float64,
+                           γ::Float64,
+                           δ::Float64,
+                           σ_η::Float64,
+                           μ_q::Float64,
+                           β₀::Float64,
+                           design::T) where T<:Union{Float16, Float32, Float64, Int} = 
+                           LinearRegressionClusterOpt(G, ng, σ_z, σ_ξ, σ_ϵ, σ_α, p,
+                                                      γ, δ, σ_η, μ_q, β₀, convert(Int, design))
+
+
 function dispersion_ng(m::LinearRegressionClusterOpt)
     sum(m.ng^2)/sum(ng)^2
 end
@@ -76,6 +93,34 @@ function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{4}})
 end
 
 
+function icc_xu(m::LinearRegressionClusterOpt)
+    icc_xu(m, Val{convert(Int, m.design)})
+end
+
+function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{1}})
+    icc_u(m)*icc_x(m)
+end
+
+function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{2}})
+    icc_u(m)*icc_x(m)
+end
+
+function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{3}})
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    num = 3*γ^2*(p-1)*p*σ_ξ^4 + σ_ξ^2*(2*γ^2*(p-1)*p*σ_z^2-σ_α^2) + (p-1)*p*γ^2*σ_z^4
+    den = (σ_ξ^2+σ_z^2)*(σ_α^2-3*γ^2*(p-1)*p*(σ_ξ^2+σ_z^2)+1)
+    -num/den
+end
+
+function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{4}})
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    num = γ^2*(15*δ^2*σ_ξ^6+(δ^2+2)*σ_ξ^2*σ_z^4+3*(2*δ^2+1)*σ_ξ^4*σ_z^2+σ_z^6)
+    den = (σ_ξ^2+σ_z^2)*(15*γ^2*δ^2*σ_ξ^4+3*γ^2*σ_η^2*σ_ξ^2+3*γ^2*σ_z^2*(δ^2*σ_ξ^2+σ_η^2)+1)
+    num/den
+end
+
+
+
 
 function icc_x(m::LinearRegressionClusterOpt)
     σ_z = m.σ_z
@@ -84,8 +129,11 @@ function icc_x(m::LinearRegressionClusterOpt)
 end
 
 function icc_u(m::LinearRegressionClusterOpt)
-    icc_u(m, Val{m.design})
+    idx = convert(Int, m.design)
+    icc_u(m, Val{idx})
 end
+
+
 
 icc_x(m::LinearRegressionCluster) = icc_x(m.opt)
 icc_u(m::LinearRegressionCluster) = icc_u(m.opt)
@@ -288,7 +336,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
     scale!(η, σ_η)
     for (i, j) in enumerate(bstarts)
         x̄[i] = mean(X[j])
-        η[i] += μ_q + δ*x̄[i]
+        η[i] += δ*x̄[i]
     end
 
     randn!(ϵ)
@@ -298,7 +346,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
 
 end
 
-function simulate!(m::LinearRegressionCluster)
+function simulate!(m::LinearRegressionCluster{T}) where T
     X, y, ϵ, _ = getcontainers(m)
     β₀ = m.opt.β₀
     design = m.opt.design

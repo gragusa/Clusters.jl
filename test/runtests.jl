@@ -2,7 +2,7 @@ using Clusters
 using DataFrames
 using Base.Test
 using CovarianceMatrices
-
+using CSV
 const sim = 300
 
 ## Two test.
@@ -12,7 +12,7 @@ const sim = 300
       coincides with those of STATA
 =#
 
-df = readtable("test.txt")
+df = CSV.read("test.txt")
 ng = vec(readcsv("states.txt", header = true)[1])
 ng = floor.(Int64, ng./5000)
 
@@ -356,3 +356,62 @@ parm_design_4 = readcsv("parameters/parameters-design4.csv")
       end
    
 end
+
+
+
+parm_design_1 = convert(Array, CSV.read("parameters/parameters-design1-xu.csv", datarow = 1))
+
+@testset "icc_x and icc_u" begin
+      ng = repeat([150], outer=20)
+      rhoxu = [.2, .5, .9, .99]
+      
+
+      parm_design_1 = mapslices(u->[u], parm_design_1, 2)
+      parm_design_2 = mapslices(u->[u], parm_design_2, 2)
+      parm_design_3 = mapslices(u->[u], parm_design_3, 2)
+      parm_design_4 = mapslices(u->[u], parm_design_4, 2)
+
+      for jopt in [parm_design_1, parm_design_2, parm_design_3, parm_design_4]
+            opt = map(u -> LinearRegressionClusterOpt(length(ng), ng, u...), jopt) 
+            @test all(map(u -> Clusters.icc_xu(u), opt) .≈ rhoxu)      
+      end      
+end
+
+
+using RCall
+R"library('ICC')"
+
+
+parm_design_1 = convert(Array, CSV.read("parameters/parameters-design1-xu.csv", datarow = 1))
+parm_design_2 = convert(Array, CSV.read("parameters/parameters-design2-xu.csv", datarow = 1))
+parm_design_3 = convert(Array, CSV.read("parameters/parameters-design3-xu.csv", datarow = 1))
+parm_design_4 = convert(Array, CSV.read("parameters/parameters-design4-xu.csv", datarow = 1))
+
+
+parm_design_1 = mapslices(u->[u], parm_design_1, 2)
+parm_design_2 = mapslices(u->[u], parm_design_2, 2)
+parm_design_3 = mapslices(u->[u], parm_design_3, 2)
+parm_design_4 = mapslices(u->[u], parm_design_4, 2)
+
+
+@testset "icc_x and icc_u" begin
+      ng = repeat([20], outer=2000)
+      rhoxu = [.2, .5, .9, .99]
+      
+
+      #for jopt in  [parm_design_1, parm_design_2, parm_design_3, parm_design_4]
+      jopt = parm_design_4
+            opt = map(u -> LinearRegressionClusterOpt(length(ng), ng, u...), jopt)
+            m = map(u -> initialize(LinearRegressionCluster, u), opt)
+            map(simulate!, m)
+            est_rhoxu = map(u -> begin
+                  xu = u.X.*(u.y)
+                  cl = u.cl
+                  est_rhoxu = R"ICCbare(cl, xu, data.frame(cl=$cl, xu=$(xu)))"
+                  est_rhoxu[1]
+            end, m)
+
+            @test est_rhoxu ≈ rhoxu atol = 0.1
+      end
+end
+
