@@ -388,6 +388,37 @@ function montecarlo(m::Type{T} where T <: MonteCarloModel, opt::MonteCarloModelO
 
 end
 
+function montecarlolight(m::Type{T} where T <: MonteCarloModel, opt::MonteCarloModelOpt; simulations::Int64 = 1000)
+    model = initialize(m, opt)
+    simulate!(model)
+    out = estimatemodellight(model)
+    res = GrowableArray(out)
+    sizehint!(res,simulations)
+    @inbounds for j in 1:simulations
+        simulate!(model)
+        push!(res, estimatemodel(model))
+    end
+    ## Add information about the experiment
+
+
+    res = convert(DataFrame, convert(Array,res))
+    names!(res,
+    [:theta_u, :V1_u, :V2_u, :V3_u, :V4_u, :V5_u,
+    :G_u, :k_u,
+    :qu_025, :qu_975,
+    :qu_050, :qu_950,
+    :qu0_025, :qu0_975,
+    :qu0_050, :qu0_950,
+    :theta_w, :V1_w, :V2_w, :V3_w, :V4_w, :V5_w,
+    :G_w, :k_w,
+    :qw0_025, :qw0_975, :qw0_050, :qw0_950])
+
+end
+
+
+
+
+
 
 function estimatemodel(m::LinearRegressionCluster)
     y = m.y
@@ -434,6 +465,58 @@ function estimatemodel(m::LinearRegressionCluster)
         fill(NaN, 28)
     end
 end
+
+
+function estimatemodellight(m::LinearRegressionCluster)
+    y = m.y
+    X = m.X
+    cl = m.cl
+    iter = m.iter
+    w  = Val{:weighted}
+    uw = Val{:unweighted}
+    qu = zeros(4)
+    qw = zeros(4)
+    qu0 = zeros(4)
+    qw0 = zeros(4)
+    try
+        fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
+
+        theta_u = first(coef(fitted_u))
+        V1_u = first(stderr(fitted_u))
+        V2_u = first(stderr(fitted_u, HC1()))
+
+        V3_u = faststderr(fitted_u, m, CRHC1(cl), uw)
+        V4_u = faststderr(fitted_u, m, CRHC2(cl), uw)
+        V5_u = faststderr(fitted_u, m, CRHC3(cl), uw)
+
+        fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
+        theta_w = first(coef(fitted_w))
+        V1_w = fastiid(fitted_w, m)
+        V2_w = first(stderr(fitted_w, HC1()))
+
+        V3_w = faststderr(fitted_w, m, CRHC1(cl), w)
+        V4_w = faststderr(fitted_w, m, CRHC2(cl), w)
+        V5_w = faststderr(fitted_w, m, CRHC3(cl), w)
+
+        G_u, k_u = kappastar(fitted_u, m, uw)
+        G_w, k_w = kappastar(fitted_w, m, w)
+
+        # _, _, qw = fastwildboot_nonull(fitted_w, m, Rademacher(), rep = 499)
+        # _, _, qu = fastwildboot_nonull(fitted_u, m, Rademacher(), rep = 499)
+
+        # _, _, qw0 = fastwildboot_null(fitted_w, m, Rademacher(),  rep = 499)
+        # _, _, qu0 = fastwildboot_null(fitted_u, m, Clusters.Rademacher(),  rep = 499)
+
+        [theta_u, V1_u, V2_u, V3_u, V4_u, V5_u, G_u, k_u,
+        qu[1], qu[4], qu[2], qu[3],
+        qu0[1], qu0[4], qu0[2], qu0[3],
+        theta_w, V1_w, V2_w, V3_w, V4_w, V5_w, G_w, k_w,
+        qw0[1], qw0[4], qw0[2], qw0[3]]
+    catch
+        fill(NaN, 28)
+    end
+end
+
 
 ##=
 ## Standard Errors
@@ -658,7 +741,8 @@ function wbweights!(x::TwoPoint, W::Vector{Float32})
 end
 
 export LinearRegressionCluster, LinearRegressionClusterOpt,
-initialize, simulate!, estimatemodel, montecarlo,
+initialize, simulate!, estimatemodel, montecarlo, 
+estimatemodellight, montecarlolight,
 ConfInterval, coverage, average_length, icc_x, icc_u
 
 end
