@@ -396,7 +396,7 @@ function montecarlolight(m::Type{T} where T <: MonteCarloModel, opt::MonteCarloM
     sizehint!(res,simulations)
     @inbounds for j in 1:simulations
         simulate!(model)
-        push!(res, estimatemodel(model))
+        push!(res, estimatemodellight(model))
     end
     ## Add information about the experiment
 
