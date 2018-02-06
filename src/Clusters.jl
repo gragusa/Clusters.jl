@@ -478,6 +478,14 @@ function estimatemodellight(m::LinearRegressionCluster)
     qw = zeros(4)
     qu0 = zeros(4)
     qw0 = zeros(4)
+    V4_w = 1.0
+    V5_w = 1.0
+    V4_u = 1.0
+    V5_u = 1.
+    G_u = 1.0 
+    k_u = 1.0
+    G_w = 1.0 
+    k_w = 1.0
     try
         fitted_u = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink())
 
@@ -486,8 +494,8 @@ function estimatemodellight(m::LinearRegressionCluster)
         V2_u = first(stderr(fitted_u, HC1()))
 
         V3_u = faststderr(fitted_u, m, CRHC1(cl), uw)
-        V4_u = faststderr(fitted_u, m, CRHC2(cl), uw)
-        V5_u = faststderr(fitted_u, m, CRHC3(cl), uw)
+        #V4_u = faststderr(fitted_u, m, CRHC2(cl), uw)
+        #V5_u = faststderr(fitted_u, m, CRHC3(cl), uw)
 
         fitted_w = fit(GeneralizedLinearModel, X, y, Normal(), IdentityLink(), wts = m.wts)
         theta_w = first(coef(fitted_w))
@@ -495,11 +503,11 @@ function estimatemodellight(m::LinearRegressionCluster)
         V2_w = first(stderr(fitted_w, HC1()))
 
         V3_w = faststderr(fitted_w, m, CRHC1(cl), w)
-        V4_w = faststderr(fitted_w, m, CRHC2(cl), w)
-        V5_w = faststderr(fitted_w, m, CRHC3(cl), w)
+        #V4_w = faststderr(fitted_w, m, CRHC2(cl), w)
+        #V5_w = faststderr(fitted_w, m, CRHC3(cl), w)
 
-        G_u, k_u = kappastar(fitted_u, m, uw)
-        G_w, k_w = kappastar(fitted_w, m, w)
+        #G_u, k_u = kappastar(fitted_u, m, uw)
+        #G_w, k_w = kappastar(fitted_w, m, w)
 
         # _, _, qw = fastwildboot_nonull(fitted_w, m, Rademacher(), rep = 499)
         # _, _, qu = fastwildboot_nonull(fitted_u, m, Rademacher(), rep = 499)
