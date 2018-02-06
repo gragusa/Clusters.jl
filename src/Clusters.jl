@@ -102,7 +102,8 @@ function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{1}})
 end
 
 function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{2}})
-    icc_u(m)*icc_x(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    (σ_α^2*σ_ξ^2)*(σ_α^2+2)*(σ_ξ^2+σ_z^2)
 end
 
 function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{3}})
@@ -114,10 +115,13 @@ end
 
 function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{4}})
     σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
-    num = γ^2*(15*δ^2*σ_ξ^6+(δ^2+2)*σ_ξ^2*σ_z^4+3*(2*δ^2+1)*σ_ξ^4*σ_z^2+σ_z^6)
-    den = (σ_ξ^2+σ_z^2)*(15*γ^2*δ^2*σ_ξ^4+3*γ^2*σ_η^2*σ_ξ^2+3*γ^2*σ_z^2*(δ^2*σ_ξ^2+σ_η^2)+1)
+    num = γ^2*(3*σ_ξ^4*(5*δ^2*σ_ξ^2+σ_η^2)+σ_z^4*(δ^2*σ_ξ^2+σ_η^2)+2σ_ξ^2*σ _z^2*(3*δ^2*σ_ξ^2+σ_η^2)))
+    den = (σ_ξ^2+σ_z^2)*(3*γ^2*(5*δ^2*σ_ξ^4+σ_ξ^2*(σ_η^2+δ^2*σ_z^2)+σ_η^2*σ_z^2)+1)
     num/den
 end
+
+
+
 
 
 
