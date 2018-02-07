@@ -42,7 +42,7 @@ struct LinearRegressionClusterOpt <: MonteCarloModelOpt
     γ::Float64
     δ::Float64
     σ_η::Float64
-    μ_q::Float64
+    b::Float64
     ## Null value
     β₀::Float64
     design::Int
@@ -58,11 +58,11 @@ LinearRegressionClusterOpt(G::Int64,
                            γ::Float64,
                            δ::Float64,
                            σ_η::Float64,
-                           μ_q::Float64,
+                           b::Float64,
                            β₀::Float64,
                            design::T) where T<:Union{Float16, Float32, Float64, Int} = 
                            LinearRegressionClusterOpt(G, ng, σ_z, σ_ξ, σ_ϵ, σ_α, p,
-                                                      γ, δ, σ_η, μ_q, β₀, convert(Int, design))
+                                                      γ, δ, σ_η, b, β₀, convert(Int, design))
 
 
 function dispersion_ng(m::LinearRegressionClusterOpt)
@@ -71,24 +71,24 @@ end
 
 
 function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{1}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     σ_α^2/(σ_α^2+σ_ϵ^2)
 end
 
 function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{2}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     σ_α^2/(σ_α^2+σ_ϵ^2)
 end
 
 function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{3}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     (σ_α^2 + (1-p)*p*γ^2*σ_ξ^2)/(σ_α^2 + σ_ϵ^2 + (1-p)*p*γ^2*(1+σ_ξ^2))
 end
 
 function icc_u(m::LinearRegressionClusterOpt, ::Type{Val{4}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
-    num = γ^2*σ_ξ^2*(δ^2*σ_z^2 + σ_η^2 + δ*(2*δ + 3*μ_q)*σ_ξ^2)
-    den = 1 + γ^2*(σ_z^2*(μ_q^2 + σ_η^2) + (μ_q^2 + δ^2*σ_z^2 + σ_η^2)*σ_ξ^2 + 2*δ^2*σ_ξ^4)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
+    num = γ^2*σ_ξ^2*(δ^2*σ_z^2 + σ_η^2 + δ*(2*δ + 3*b)*σ_ξ^2)
+    den = 1 + γ^2*(σ_z^2*(b^2 + σ_η^2) + (b^2 + δ^2*σ_z^2 + σ_η^2)*σ_ξ^2 + 2*δ^2*σ_ξ^4)
     num/den
 end
 
@@ -102,19 +102,19 @@ function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{1}})
 end
 
 function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{2}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     (σ_α^2*σ_ξ^2)/((σ_α^2+2)*(σ_ξ^2+σ_z^2))
 end
 
 function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{3}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     num = 3*γ^2*(p-1)*p*σ_ξ^4 + σ_ξ^2*(2*γ^2*(p-1)*p*σ_z^2-σ_α^2) + (p-1)*p*γ^2*σ_z^4
     den = (σ_ξ^2+σ_z^2)*(σ_α^2-3*γ^2*(p-1)*p*(σ_ξ^2+σ_z^2)+1)
     -num/den
 end
 
 function icc_xu(m::LinearRegressionClusterOpt, ::Type{Val{4}})
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     num = γ^2*(3*σ_ξ^4*(5*δ^2*σ_ξ^2+σ_η^2)+σ_z^4*(δ^2*σ_ξ^2+σ_η^2)+2σ_ξ^2*σ_z^2*(3*δ^2*σ_ξ^2+σ_η^2))
     den = (σ_ξ^2+σ_z^2)*(3*γ^2*(5*δ^2*σ_ξ^4+σ_ξ^2*(σ_η^2+δ^2*σ_z^2)+σ_η^2*σ_z^2)+1)
     num/den
@@ -232,7 +232,7 @@ function getparms(opt::LinearRegressionClusterOpt)
     opt.γ,
     opt.δ,
     opt.σ_η,
-    opt.μ_q)
+    opt.b)
 end
 
 
@@ -243,7 +243,7 @@ end
 
 function simulate!(m::LinearRegressionCluster, ::Type{Val{1}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     clus, iter, bstarts = gethyper(m)
     ## GENERATE X = z + ξ
     randn!(X)
@@ -265,9 +265,9 @@ end
 
 function simulate!(m::LinearRegressionCluster, ::Type{Val{2}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     clus, iter, bstarts = gethyper(m)
-    κ  = sqrt(π/(2*(σ_z^2+σ_ξ^2)))
+    
 
     ## GENERATE X = z + ξ
     randn!(X)
@@ -281,7 +281,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{2}})
     ## GENERATE u = α + ξ
     randn!(ϵ)
     for i in eachindex(ϵ)
-        ϵ[i] *= sqrt(κ.*abs(X[i]))
+        ϵ[i] *= abs(X[i])*b*σ_ϵ
     end
     randn!(η)
     scale!(η, σ_α)
@@ -292,7 +292,7 @@ end
 
 function simulate!(m::LinearRegressionCluster, ::Type{Val{3}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     clus, iter, bstarts = gethyper(m)
 
 
@@ -325,7 +325,7 @@ end
 
 function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
     X, y, ϵ, η, D, σ_e, x̄ = getcontainers(m)
-    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, μ_q = getparms(m)
+    σ_z, σ_ξ, σ_ϵ, σ_α, p, γ, δ, σ_η, b = getparms(m)
     clus, iter, bstarts = gethyper(m)
     ## GENERATE X = z + ξ
     randn!(X)
@@ -344,6 +344,7 @@ function simulate!(m::LinearRegressionCluster, ::Type{Val{4}})
     end
 
     randn!(ϵ)
+    scale!(ϵ, σ_ϵ)
     for (i, (n, g)) in enumerate(zip(iter, clus))
         ϵ[i] += γ*X[i]*η[g]
     end

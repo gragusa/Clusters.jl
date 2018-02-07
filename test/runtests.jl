@@ -395,7 +395,7 @@ parm_design_4 = mapslices(u->[u], parm_design_4, 2)
 
 
 @testset "icc_x and icc_u" begin
-      ng = repeat([20], outer=2000)
+      ng = repeat([20], outer=10000)
       rhoxu = [.2, .5, .9, .99]
       
 
@@ -408,7 +408,7 @@ parm_design_4 = mapslices(u->[u], parm_design_4, 2)
                   xu = u.X.*(u.y)
                   cl = u.cl
                   est_rhoxu = R"ICCbare(cl, xu, data.frame(cl=$cl, xu=$(xu)))"
-                  est_rhoxu[1]
+                  (est_rhoxu[1], var(u.X), var(u.y))
             end, m)
 
             @test est_rhoxu ≈ rhoxu atol = 0.1
