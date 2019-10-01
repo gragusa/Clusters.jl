@@ -1,0 +1,7 @@
+name = "Clusters"
+UUID = "ff21fe0a-3fd0-564a-9fd4-7fad4c32145a"
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
+GrowableArrays = "7ebbc34c-24a4-5a3f-b49a-24be4b3feaef"
